@@ -150,6 +150,19 @@ export const api = {
     return res.json();
   },
 
+  // Tools — detect installed CLI tools
+  tools: async () => {
+    return fetchJson<{
+      platform: string;
+      tools: Record<string, { name: string; command: string; installed: boolean; version: string | null; install_cmd: string }>;
+    }>("/api/tools");
+  },
+
+  // Launch — open CLI tool in external terminal
+  launch: async (tool: string) => {
+    return fetchJson<{ ok?: boolean; error?: string; tool?: string; command?: string; platform?: string }>("/api/launch", { tool });
+  },
+
   // Pulse — live status per source (active session + latest entries)
   pulse: async () => {
     return fetchJson<Record<string, {

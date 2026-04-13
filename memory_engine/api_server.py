@@ -10,6 +10,8 @@ import json
 import os
 import re
 import sys
+import shutil
+import subprocess
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta, timezone
@@ -63,6 +65,8 @@ class APIHandler(BaseHTTPRequestHandler):
             "/api/session/summary": self._handle_session_summary_get,
             "/api/pulse": self._handle_pulse,
             "/api/export": self._handle_export,
+            "/api/launch": self._handle_launch,
+            "/api/tools": self._handle_tools,
             "/api/setup/detect": self._handle_setup_detect,
             "/api/setup/test": self._handle_setup_test,
             "/api/setup/config": self._handle_setup_config,
@@ -539,6 +543,107 @@ class APIHandler(BaseHTTPRequestHandler):
             "date": date_str,
             "entries": len(entries),
         })
+
+    # ── Tools / Launch ────────────────────────────────────────────────
+
+    TOOLS = {
+        "claude_code": {
+            "name": "Claude Code",
+            "command": "claude",
+            "check": ["claude", "--version"],
+            "install": {
+                "win32": "npm install -g @anthropic-ai/claude-code",
+                "darwin": "npm install -g @anthropic-ai/claude-code",
+                "linux": "npm install -g @anthropic-ai/claude-code",
+            },
+        },
+        "codex": {
+            "name": "Codex CLI",
+            "command": "codex",
+            "check": ["codex", "--version"],
+            "install": {
+                "win32": "npm install -g @openai/codex",
+                "darwin": "npm install -g @openai/codex",
+                "linux": "npm install -g @openai/codex",
+            },
+        },
+        "copilot": {
+            "name": "Copilot CLI",
+            "command": "github-copilot-cli",
+            "check": ["github-copilot-cli", "--version"],
+            "install": {
+                "win32": "npm install -g @githubnext/github-copilot-cli",
+                "darwin": "npm install -g @githubnext/github-copilot-cli",
+                "linux": "npm install -g @githubnext/github-copilot-cli",
+            },
+        },
+    }
+
+    def _handle_tools(self, params):
+        """GET /api/tools — Detect installed CLI tools and platform info."""
+        platform = sys.platform  # win32, darwin, linux
+
+        results = {}
+        for key, tool in self.TOOLS.items():
+            found = shutil.which(tool["command"]) is not None
+            version = None
+            if found:
+                try:
+                    r = subprocess.run(tool["check"], capture_output=True, text=True, timeout=5)
+                    version = r.stdout.strip().split("\n")[0][:50] if r.returncode == 0 else None
+                except Exception:
+                    pass
+            results[key] = {
+                "name": tool["name"],
+                "command": tool["command"],
+                "installed": found,
+                "version": version,
+                "install_cmd": tool["install"].get(platform, tool["install"]["linux"]),
+            }
+
+        self.send_json({"platform": platform, "tools": results})
+
+    def _handle_launch(self, params):
+        """GET /api/launch?tool=claude_code — Launch a CLI tool in an external terminal."""
+        tool_key = params.get("tool", [""])[0]
+        if tool_key not in self.TOOLS:
+            self.send_json({"error": f"Unknown tool: {tool_key}. Valid: {list(self.TOOLS.keys())}"}, 400)
+            return
+
+        tool = self.TOOLS[tool_key]
+        cmd = tool["command"]
+        platform = sys.platform
+
+        try:
+            if platform == "win32":
+                # Try Windows Terminal first, fall back to cmd
+                wt = shutil.which("wt")
+                if wt:
+                    subprocess.Popen(["wt", "new-tab", "--title", tool["name"], cmd])
+                else:
+                    subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd])
+            elif platform == "darwin":
+                # macOS: open Terminal.app with command
+                script = f'tell application "Terminal" to do script "{cmd}"'
+                subprocess.Popen(["osascript", "-e", script])
+            else:
+                # Linux: try common terminal emulators
+                for term in ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]:
+                    if shutil.which(term):
+                        if term == "gnome-terminal":
+                            subprocess.Popen([term, "--", cmd])
+                        elif term == "konsole":
+                            subprocess.Popen([term, "-e", cmd])
+                        else:
+                            subprocess.Popen([term, "-e", cmd])
+                        break
+                else:
+                    self.send_json({"error": "No terminal emulator found"}, 500)
+                    return
+
+            self.send_json({"ok": True, "tool": tool_key, "command": cmd, "platform": platform})
+        except Exception as e:
+            self.send_json({"error": str(e)}, 500)
 
     # ── Setup ────────────────────────────────────────────────────────
 

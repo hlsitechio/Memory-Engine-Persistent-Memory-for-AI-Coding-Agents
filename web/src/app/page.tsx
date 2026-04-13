@@ -6,6 +6,7 @@ import { api, SOURCE_META, Source, Entry, Session } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Database,
   MessageSquare,
@@ -21,6 +22,11 @@ import {
   GitBranch,
   Bot,
   User,
+  Play,
+  Loader2,
+  Download,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -48,6 +54,8 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [pulse, setPulse] = useState<Record<string, PulseSource>>({});
+  const [tools, setTools] = useState<Record<string, { name: string; installed: boolean; version: string | null; install_cmd: string }>>({});
+  const [launching, setLaunching] = useState<string | null>(null);
 
   useEffect(() => {
     api.stats().then((s) =>
@@ -55,7 +63,16 @@ export default function DashboardPage() {
     ).catch(() => {});
     api.sessions({ source, limit: 6 }).then((s) => setSessions(s.sessions || [])).catch(() => {});
     api.pulse().then(setPulse).catch(() => {});
+    api.tools().then((r) => setTools(r.tools || {})).catch(() => {});
   }, [source]);
+
+  const handleLaunch = async (toolKey: string) => {
+    setLaunching(toolKey);
+    try {
+      await api.launch(toolKey);
+    } catch {}
+    setTimeout(() => setLaunching(null), 2000);
+  };
 
   // Poll pulse every 5s
   useEffect(() => {
@@ -162,6 +179,36 @@ export default function DashboardPage() {
                   ) : (
                     <p className="text-xs text-muted-foreground/50 text-center py-4">No active session</p>
                   )}
+
+                  {/* Launch button */}
+                  <div className="mt-3 pt-2 border-t border-border">
+                    {tools[src]?.installed ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2 text-xs"
+                        onClick={() => handleLaunch(src)}
+                        disabled={launching === src}
+                        style={{ borderColor: srcMeta.color + "30", color: srcMeta.color }}
+                      >
+                        {launching === src ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Play className="h-3 w-3" />
+                        )}
+                        {launching === src ? "Launching..." : `Launch ${srcMeta.label}`}
+                      </Button>
+                    ) : tools[src] ? (
+                      <div className="text-center">
+                        <p className="text-[10px] text-muted-foreground/60 flex items-center justify-center gap-1 mb-1.5">
+                          <XCircle className="h-3 w-3" /> Not installed
+                        </p>
+                        <code className="text-[10px] text-muted-foreground/40 bg-muted px-2 py-0.5 rounded">
+                          {tools[src].install_cmd}
+                        </code>
+                      </div>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
             );
