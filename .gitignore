@@ -56,3 +56,7 @@ agent-memory/
 
 # Exported sessions (private conversation data)
 export/
+
+# Old HTML viewer (replaced by api_server.py + Next.js dashboard)
+memory_engine/viewer.py
+memory_engine/live_handler.py

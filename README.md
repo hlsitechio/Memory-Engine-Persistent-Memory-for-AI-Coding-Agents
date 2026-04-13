@@ -54,7 +54,8 @@ chmod +x setup.sh && ./setup.sh
 pip install -r requirements.txt
 python setup.py           # Initialize DB + configure Claude Code MCP
 python memory_engine/auto_ingest.py all   # Ingest conversations
-python memory_engine/viewer.py            # Start dashboard → http://localhost:37888
+python memory_engine/api_server.py        # Start API server → http://localhost:37888
+cd web && npm install && npm run dev      # Start dashboard → http://localhost:3000
 ```
 
 ## Components
@@ -62,13 +63,16 @@ python memory_engine/viewer.py            # Start dashboard → http://localhost
 ### Core Engine (`memory_engine/`)
 - `engine.py` — MemoryEngine class. SQLite operations, JSONL ingestion, FTS5, topics, projects
 - `mcp_server.py` — FastMCP server (stdio). Exposes 40+ tools to Claude Code
-- `viewer.py` — Web dashboard on port 37888
+- `api_server.py` — JSON API server on port 37888 (backend for the dashboard)
 - `semantic.py` — SemanticEngine. Chroma embeddings, vector search, hybrid search
-- `observations.py` — ObservationExtractor. Pattern-based knowledge extraction
-- `live_handler.py` — Live tail JavaScript/HTML
+- `observations.py` — ObservationExtractor. Pattern-based knowledge extraction (references, decisions, bugfixes, etc.)
 - `auto_ingest.py` — Background JSONL→SQLite ingestion with lockfile safety
 - `embed_batch.py` — Memory-safe batch embedding (SQLite→Chroma)
+- `cli.py` — CLI interface (ingest, export, status, config)
 - `config.py` — Cross-platform path configuration
+
+### Web Dashboard (`web/`)
+Next.js app with dark theme. Features: live pulse, session browser with digest/summary panels, search, semantic search, observations, timeline, topics, projects, live view, setup wizard.
 
 ### MCI Hooks (`hooks/`)
 Session lifecycle hooks for Claude Code:
